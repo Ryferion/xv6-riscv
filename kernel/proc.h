@@ -95,7 +95,7 @@ struct proc {
   int ticket;                  // Ticket Count
   int stride;                  // How fast it increments
   int pass;                    // Updated for time slice
-
+  int sched_ticks;
   // wait_lock must be held when using this:
   struct proc *parent;         // Parent process
 

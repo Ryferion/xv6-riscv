@@ -31,7 +31,7 @@ int pageCount = 0;
 int seed;
 
 // stride variables
-const int strideK = 10000;//(1 << 20);
+const int strideK = (1 << 20);
 
 struct cpu cpus[NCPU];
 
@@ -581,12 +581,13 @@ scheduler(void)
             
             // printf("ticket range: %d \n", inc);
             // printf("random range: %d \n \n", randNum);
-            printf("max range: %d \n", maxRange);
+            // printf("max range: %d \n", maxRange);
 
             //is the next processes's tickets in range
             if (randNum <= (nextInc)) 
             {
               // inc -= p->ticket;
+              p->sched_ticks++;
               p->state = RUNNING;
               c->proc = p;
 
@@ -639,13 +640,14 @@ scheduler(void)
           cPass = p->pass;
           // printf("current pass: %d \n", cPass);
 
-          printf("ticket: %d\n", p->ticket);
-          printf("stride: %d\n", p->stride);
-          printf("pass: %d\n", p->pass);
+          // printf("ticket: %d\n", p->ticket);
+          // printf("stride: %d\n", p->stride);
+          // printf("pass: %d\n", p->pass);
 
           if (cPass == minPass) 
           {
             p->pass += p->stride;
+            p->sched_ticks++;
 
             // run this process
             p->state = RUNNING;
@@ -885,4 +887,14 @@ void setticket(int n)
 {
   printf("Setting %d tickets to process \n", n);
   proc->ticket = n;
+}
+
+void sched_statistics() {
+  struct proc* p;
+  for(p = proc; p < &proc[NPROC]; p++){
+    if(p->state != UNUSED) {
+      printf("%s :", p->name);
+      printf("\t tickets: %d \t times scheduled: %d\n", p->ticket, p->sched_ticks);
+    }
+  } 
 }

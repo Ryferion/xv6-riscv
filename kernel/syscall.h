@@ -22,3 +22,4 @@
 #define SYS_close  21
 #define SYS_giveinfo 22
 #define SYS_setticket 23
+#define SYS_sched_statistics 24

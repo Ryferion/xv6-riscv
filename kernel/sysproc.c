@@ -127,3 +127,9 @@ uint64 sys_setticket(void) //written by ryan quach
 
   return 0;
 }
+
+/* TD: Stride scheduling code */
+uint64 sys_sched_statistics(void) {
+  sched_statistics();
+  return 0;
+}

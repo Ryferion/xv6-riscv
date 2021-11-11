@@ -38,3 +38,4 @@ entry("sleep");
 entry("uptime");
 entry("giveinfo");
 entry("setticket");
+entry("sched_statistics");

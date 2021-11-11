@@ -25,6 +25,7 @@ int sleep(int);
 int uptime(void);
 int giveinfo(int);
 void setticket(int);
+void sched_statistics(void);
 
 // ulib.c
 int stat(const char*, struct stat*);
