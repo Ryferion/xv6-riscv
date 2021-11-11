@@ -50,7 +50,7 @@ endif
 
 QEMU = qemu-system-riscv64
 
-CC = $(TOOLPREFIX)gcc
+CC = $(TOOLPREFIX)gcc-8
 AS = $(TOOLPREFIX)gas
 LD = $(TOOLPREFIX)ld
 OBJCOPY = $(TOOLPREFIX)objcopy
@@ -70,6 +70,10 @@ endif
 ifneq ($(shell $(CC) -dumpspecs 2>/dev/null | grep -e '[^f]nopie'),)
 CFLAGS += -fno-pie -nopie
 endif
+LAB2 = LOTTERY
+LAB2 = STRIDE
+LAB2 = REGULAR
+CFLAGS += -D$(LAB2)
 
 LDFLAGS = -z max-page-size=4096
 
@@ -132,6 +136,9 @@ UPROGS=\
 	$U/_grind\
 	$U/_wc\
 	$U/_zombie\
+	$U/_test\
+	$U/_test1\
+	$U/_test2\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)

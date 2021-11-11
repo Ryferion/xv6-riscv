@@ -95,3 +95,35 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+extern int callCount;
+uint64 sys_giveinfo(void) //written by ryan quach and tandy dang 
+{
+  int n;
+  argint(0, &n);
+  if (n == 2)
+  {
+    return callCount;
+  }
+  if ((n == 1) || (n == 3))
+  {
+    uint out = print_info(n);
+    return out;
+  }
+  return 0;
+}
+
+uint64 sys_setticket(void) //written by ryan quach
+{
+  int n;
+  // int strideK = 10000;
+  argint(0, &n);
+  // printf("sys setting ticket to n: %d\n", n);
+  // setticket(n);
+  myproc()->ticket = n;
+  // myproc()->stride = strideK / n;
+  myproc()->pass = 0;
+  // printf("current proc tickets: %d\n", myproc()->ticket);
+
+  return 0;
+}

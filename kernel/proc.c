@@ -6,6 +6,33 @@
 #include "proc.h"
 #include "defs.h"
 
+// added logic/w makefile to toggle which scheduler to use
+#ifdef LOTTERY 
+  int LOTTERYCHECK = 1;
+#else
+  int LOTTERYCHECK = 0;
+#endif 
+
+#ifdef STRIDE
+  int STRIDECHECK = 1;
+#else
+  int STRIDECHECK = 0;
+#endif 
+
+#ifdef REGULAR
+  int REGCHECK = 1;
+#else
+  int REGCHECK = 0;
+#endif 
+
+// lottery variables
+int numCall = 0;
+int pageCount = 0;
+int seed;
+
+// stride variables
+const int strideK = 10000;//(1 << 20);
+
 struct cpu cpus[NCPU];
 
 struct proc proc[NPROC];
@@ -34,6 +61,7 @@ proc_mapstacks(pagetable_t kpgtbl) {
   struct proc *p;
   
   for(p = proc; p < &proc[NPROC]; p++) {
+    
     char *pa = kalloc();
     if(pa == 0)
       panic("kalloc");
@@ -119,6 +147,10 @@ allocproc(void)
 found:
   p->pid = allocpid();
   p->state = USED;
+  
+  p->ticket = 10;
+  p->stride = strideK/p->ticket;
+  p->pass = p->stride;
 
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
@@ -175,6 +207,7 @@ proc_pagetable(struct proc *p)
 
   // An empty page table.
   pagetable = uvmcreate();
+  pageCount++;
   if(pagetable == 0)
     return 0;
 
@@ -239,11 +272,14 @@ userinit(void)
   p->trapframe->epc = 0;      // user program counter
   p->trapframe->sp = PGSIZE;  // user stack pointer
 
+  p->ticket = 100;
+  p->stride = strideK/p->ticket;
+  p->pass = 0;
+
   safestrcpy(p->name, "initcode", sizeof(p->name));
   p->cwd = namei("/");
 
   p->state = RUNNABLE;
-
   release(&p->lock);
 }
 
@@ -263,6 +299,7 @@ growproc(int n)
   } else if(n < 0){
     sz = uvmdealloc(p->pagetable, sz, sz + n);
   }
+  
   p->sz = sz;
   return 0;
 }
@@ -427,6 +464,28 @@ wait(uint64 addr)
   }
 }
 
+
+int randy(int a, int b)
+{
+  long current; 
+  // got this implementation of random from:
+  // https://stackoverflow.com/questions/24005459/implementation-of-the-random-number-generator-in-c-c
+  // modified so seed is just an incrementing int, as opposed to passed in value
+  
+  seed++;
+  seed = seed * 1103515245 + 12345; 
+  current = (unsigned int)(seed/65536) % 32768; 
+
+  if (b < a) //swap in case the parameters are backwards
+  {
+    int hold = a;
+    a = b;
+    b = hold;
+  }
+  int thisRange = b - a + 1;
+  return current % thisRange + a;
+}
+
 // Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
 // Scheduler never returns.  It loops, doing:
@@ -434,33 +493,171 @@ wait(uint64 addr)
 //  - swtch to start running that process.
 //  - eventually that process transfers control
 //    via swtch back to the scheduler.
+
 void
 scheduler(void)
 {
   struct proc *p;
   struct cpu *c = mycpu();
+
+  // if (!STRIDECHECK)
+  // {
+  //   printf("not stride\n");
+  // }
+  // if (STRIDECHECK)
+  // {
+  //   printf("stride\n");
+  // }
+  // if (!LOTTERYCHECK)
+  // {
+  //   printf("not lottery\n");
+  // }
+  // if (LOTTERYCHECK)
+  // {
+  //   printf("lottery\n");
+  // }
+
+
   
+  // printf("strideK %d\n", strideK);
   c->proc = 0;
+
   for(;;){
     // Avoid deadlock by ensuring that devices can interrupt.
     intr_on();
+    
+    // ---------- regular scheduler ----------
+    if (REGCHECK)
+    {
+      for(p = proc; p < &proc[NPROC]; p++) {
+        acquire(&p->lock);
+        if(p->state == RUNNABLE) {
+          // Switch to chosen process.  It is the process's job
+          // to release its lock and then reacquire it
+          // before jumping back to us.
+          
+          p->state = RUNNING;
+          c->proc = p;
+          swtch(&c->context, &p->context);
 
-    for(p = proc; p < &proc[NPROC]; p++) {
-      acquire(&p->lock);
-      if(p->state == RUNNABLE) {
-        // Switch to chosen process.  It is the process's job
-        // to release its lock and then reacquire it
-        // before jumping back to us.
-        p->state = RUNNING;
-        c->proc = p;
-        swtch(&c->context, &p->context);
-
-        // Process is done running for now.
-        // It should have changed its p->state before coming back.
-        c->proc = 0;
+          // Process is done running for now.
+          // It should have changed its p->state before coming back.
+          c->proc = 0;
+        }
+        release(&p->lock);
       }
-      release(&p->lock);
     }
+    // ---------- lottery scheduler ----------
+    else if (LOTTERYCHECK)
+    {
+      int maxRange = 0;
+      for(p = proc; p < &proc[NPROC]; p++)
+      {
+        if(p->state == RUNNABLE) 
+        {
+          maxRange += p->ticket;
+        }
+      }
+
+      // current count of tickets at current process number
+      int inc = 0;
+      
+      // immediately next ticket count
+      int nextInc = 0;
+      // random based on total tickets
+      int randNum = 0;
+      randNum = randy(0, maxRange);
+
+      
+      // while (NPROC > 0)
+      {
+        for(p = proc; p < &proc[NPROC]; p++)
+        {
+          acquire(&p->lock);
+          if(p->state == RUNNABLE) {
+            inc = p->ticket;
+            //p->ticket = inc + 1;
+            nextInc = inc % p->ticket;
+            
+            // printf("ticket range: %d \n", inc);
+            // printf("random range: %d \n \n", randNum);
+            printf("max range: %d \n", maxRange);
+
+            //is the next processes's tickets in range
+            if (randNum <= (nextInc)) 
+            {
+              // inc -= p->ticket;
+              p->state = RUNNING;
+              c->proc = p;
+
+              swtch(&c->context, &p->context);
+              c->proc = 0;
+            }
+            else
+            {
+              // inc += p->ticket;
+              randNum += p->ticket;
+            }
+          }
+          release(&p->lock);
+        }
+      }
+    }
+    // ---------- stride scheduler ----------
+    else if (STRIDECHECK)
+    {
+      // smallest pass
+      int minPass;
+      // starting min lol
+      minPass = strideK;
+
+      // find smallest pass
+      for(p = proc; p < &proc[NPROC]; p++)
+      {
+        if(p->state == RUNNABLE) 
+        {
+          if (p->pass < minPass)
+          {
+            minPass = p->pass;
+          }
+        }
+      }
+
+      // current pass of process
+      int cPass = 0;
+      
+      for(p = proc; p < &proc[NPROC]; p++)
+      {
+        acquire(&p->lock);
+        if(p->state == RUNNABLE) 
+        {
+          
+          // printf("random range: %d \n \n", randNum);
+          // printf("max range: %d \n", maxRange);
+
+          // current pass
+          cPass = p->pass;
+          // printf("current pass: %d \n", cPass);
+
+          printf("ticket: %d\n", p->ticket);
+          printf("stride: %d\n", p->stride);
+          printf("pass: %d\n", p->pass);
+
+          if (cPass == minPass) 
+          {
+            p->pass += p->stride;
+
+            // run this process
+            p->state = RUNNING;
+            c->proc = p;
+
+            swtch(&c->context, &p->context);
+            c->proc = 0;
+          }
+        }
+        release(&p->lock);
+        }
+      }
   }
 }
 
@@ -516,6 +713,7 @@ forkret(void)
     // File system initialization must be run in the context of a
     // regular process (e.g., because it calls sleep), and thus cannot
     // be run from main().
+
     first = 0;
     fsinit(ROOTDEV);
   }
@@ -653,4 +851,38 @@ procdump(void)
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
   }
+}
+
+int print_info(int n)
+{
+  printf("Printing info\n");
+  if (n == 1) //number of processes in system
+  {
+    struct proc *p;
+    int number = 0;
+    for(p = proc; p < &proc[NPROC]; p++) 
+    {
+      if(p != myproc())
+      {
+        acquire(&p->lock);
+        if(p->state != UNUSED) 
+        {
+          number++;
+        }
+        release(&p->lock);
+      }
+    }
+    return number;
+  }
+  if (n == 3) //the number of memory pages the current process is using
+  {
+    return pageCount;
+  }
+  return 0;
+}
+
+void setticket(int n)
+{
+  printf("Setting %d tickets to process \n", n);
+  proc->ticket = n;
 }
