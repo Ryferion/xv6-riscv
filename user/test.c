@@ -5,9 +5,8 @@
 int main(int argc, char *argv[])
 {
     setticket(30);    // write your own function here 
-    sched_statistics();
     int i,k; 
-    const int loop = 100000; // adjust this parameter depending on your system speed 
+    const int loop = 10000; // adjust this parameter depending on your system speed 
     for(i=0; i < loop; i++) 
     { 
         asm("nop");  // to prevent the compiler from optimizing the for-loop 
@@ -16,6 +15,6 @@ int main(int argc, char *argv[])
            asm("nop"); 
         } 
     } 
-    // sched_statistics(); // your syscall 
+    sched_statistics(); // your syscall 
     exit(0);
 }

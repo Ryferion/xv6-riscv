@@ -5,6 +5,7 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "rand.h"
 
 // added logic/w makefile to toggle which scheduler to use
 #ifdef LOTTERY 
@@ -30,8 +31,12 @@ int numCall = 0;
 int pageCount = 0;
 int seed;
 
+int test_tick = 0;
+int test1_tick = 0;
+int test2_tick = 0;
+
 // stride variables
-const int strideK = (1 << 20);
+uint64 strideK = (1 << 20);
 
 struct cpu cpus[NCPU];
 
@@ -148,9 +153,9 @@ found:
   p->pid = allocpid();
   p->state = USED;
   
-  p->ticket = 10;
-  p->stride = strideK/p->ticket;
-  p->pass = p->stride;
+  // p->ticket = 10;
+  // p->stride = strideK/p->ticket;
+  // p->pass = p->stride;
 
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
@@ -272,9 +277,9 @@ userinit(void)
   p->trapframe->epc = 0;      // user program counter
   p->trapframe->sp = PGSIZE;  // user stack pointer
 
-  p->ticket = 100;
-  p->stride = strideK/p->ticket;
-  p->pass = 0;
+  // p->ticket = 100;
+  // p->stride = strideK/p->ticket;
+  // p->pass = 0;
 
   safestrcpy(p->name, "initcode", sizeof(p->name));
   p->cwd = namei("/");
@@ -331,6 +336,20 @@ fork(void)
 
   // Cause fork to return 0 in the child.
   np->trapframe->a0 = 0;
+
+  // define lottery and stride parameters
+  if (np->ticket == 0)
+  {
+    np->stride = 0;
+    np->sched_ticks = 0;
+    np->pass = -1;
+  }
+  else
+  {
+    np->stride = strideK/np->ticket;
+    np->sched_ticks = 0;
+    np->pass = np->stride;
+  }
 
   // increment reference counts on open file descriptors.
   for(i = 0; i < NOFILE; i++)
@@ -467,11 +486,11 @@ wait(uint64 addr)
 
 int randy(int a, int b)
 {
-  long current; 
-  // got this implementation of random from:
-  // https://stackoverflow.com/questions/24005459/implementation-of-the-random-number-generator-in-c-c
-  // modified so seed is just an incrementing int, as opposed to passed in value
+  // // got this implementation of random from:
+  // // https://stackoverflow.com/questions/24005459/implementation-of-the-random-number-generator-in-c-c
+  // // modified so seed is just an incrementing int, as opposed to passed in value
   
+  long current; 
   seed++;
   seed = seed * 1103515245 + 12345; 
   current = (unsigned int)(seed/65536) % 32768; 
@@ -484,6 +503,10 @@ int randy(int a, int b)
   }
   int thisRange = b - a + 1;
   return current % thisRange + a;
+  // unsigned long  bins = (unsigned long) b + 1; //number of bins
+  // unsigned long  num_rand = (unsigned long) RAND_MAX + 1;
+  // unsigned long  bin_size = num_rand / bins;
+  // return genrand() / bin_size;
 }
 
 // Per-CPU process scheduler.
@@ -500,26 +523,6 @@ scheduler(void)
   struct proc *p;
   struct cpu *c = mycpu();
 
-  // if (!STRIDECHECK)
-  // {
-  //   printf("not stride\n");
-  // }
-  // if (STRIDECHECK)
-  // {
-  //   printf("stride\n");
-  // }
-  // if (!LOTTERYCHECK)
-  // {
-  //   printf("not lottery\n");
-  // }
-  // if (LOTTERYCHECK)
-  // {
-  //   printf("lottery\n");
-  // }
-
-
-  
-  // printf("strideK %d\n", strideK);
   c->proc = 0;
 
   for(;;){
@@ -548,60 +551,67 @@ scheduler(void)
       }
     }
     // ---------- lottery scheduler ----------
-    else if (LOTTERYCHECK)
+    if (LOTTERYCHECK)
     {
+       
+      
+
       int maxRange = 0;
+      
       for(p = proc; p < &proc[NPROC]; p++)
       {
+        acquire(&p->lock);
         if(p->state == RUNNABLE) 
         {
           maxRange += p->ticket;
         }
+        release(&p->lock);
       }
 
       // current count of tickets at current process number
       int inc = 0;
       
-      // immediately next ticket count
-      int nextInc = 0;
       // random based on total tickets
-      int randNum = 0;
+      int randNum;
       randNum = randy(0, maxRange);
-
       
-      // while (NPROC > 0)
+      for(p = proc; p < &proc[NPROC]; p++)
       {
-        for(p = proc; p < &proc[NPROC]; p++)
+        acquire(&p->lock);
+        if(p->state == RUNNABLE) 
         {
-          acquire(&p->lock);
-          if(p->state == RUNNABLE) {
-            inc = p->ticket;
-            //p->ticket = inc + 1;
-            nextInc = inc % p->ticket;
-            
-            // printf("ticket range: %d \n", inc);
-            // printf("random range: %d \n \n", randNum);
-            // printf("max range: %d \n", maxRange);
-
-            //is the next processes's tickets in range
-            if (randNum <= (nextInc)) 
+          if ((inc + p->ticket) >= randNum)
+          {
+            if (strncmp(p->name, "test", 4) == 0)
             {
-              // inc -= p->ticket;
+              test_tick++;
+            }
+            if (strncmp(p->name, "test1", 5) == 0)
+            {
+              test1_tick++;
+            }
+            if (strncmp(p->name, "test2", 5) == 0)
+            {
+              test2_tick++;
+            }
+            // printf("%d\n", randNum);
+            // inc = p->ticket;
+            if (p->ticket > 0)
+            {
               p->sched_ticks++;
-              p->state = RUNNING;
-              c->proc = p;
-
-              swtch(&c->context, &p->context);
-              c->proc = 0;
             }
-            else
-            {
-              // inc += p->ticket;
-              randNum += p->ticket;
-            }
+            p->state = RUNNING;
+            c->proc = p;
+            
+            swtch(&c->context, &p->context);
+            c->proc = 0;
           }
-          release(&p->lock);
+          if ((inc + p->ticket) < randNum)
+          {
+            inc += p->ticket;
+          }
         }
+        release(&p->lock);
       }
     }
     // ---------- stride scheduler ----------
@@ -615,39 +625,48 @@ scheduler(void)
       // find smallest pass
       for(p = proc; p < &proc[NPROC]; p++)
       {
+        acquire(&p->lock);
         if(p->state == RUNNABLE) 
         {
           if (p->pass < minPass)
           {
             minPass = p->pass;
+            if (p->ticket != 0)
+            {
+              p->stride = strideK/p->ticket;
+              p->pass = p->stride;
+            }
           }
         }
+        release(&p->lock);
       }
-
-      // current pass of process
-      int cPass = 0;
       
       for(p = proc; p < &proc[NPROC]; p++)
       {
         acquire(&p->lock);
         if(p->state == RUNNABLE) 
         {
-          
-          // printf("random range: %d \n \n", randNum);
-          // printf("max range: %d \n", maxRange);
-
-          // current pass
-          cPass = p->pass;
-          // printf("current pass: %d \n", cPass);
 
           // printf("ticket: %d\n", p->ticket);
           // printf("stride: %d\n", p->stride);
           // printf("pass: %d\n", p->pass);
 
-          if (cPass == minPass) 
+          if (p->pass == minPass) 
           {
             p->pass += p->stride;
-            p->sched_ticks++;
+
+            if (strncmp(p->name, "test", 4) == 0)
+            {
+              test_tick++;
+            }
+            if (strncmp(p->name, "test1", 5) == 0)
+            {
+              test1_tick++;
+            }
+            if (strncmp(p->name, "test2", 5) == 0)
+            {
+              test2_tick++;
+            }
 
             // run this process
             p->state = RUNNING;
@@ -883,18 +902,21 @@ int print_info(int n)
   return 0;
 }
 
-void setticket(int n)
+void setticket(struct proc* p, int n)
 {
-  printf("Setting %d tickets to process \n", n);
-  proc->ticket = n;
+  p->ticket = n;
+  
 }
 
 void sched_statistics() {
-  struct proc* p;
-  for(p = proc; p < &proc[NPROC]; p++){
-    if(p->state != UNUSED) {
-      printf("%s :", p->name);
-      printf("\t tickets: %d \t times scheduled: %d\n", p->ticket, p->sched_ticks);
-    }
-  } 
+  // struct proc* p;
+  printf("test ticks: %d\n", test_tick);
+  printf("test1 ticks: %d\n", test1_tick);
+  printf("test2 ticks: %d\n", test2_tick);
+  // for (p = proc; p < &proc[NPROC]; p++){
+  //   if ((p->state != UNUSED) && (p->ticket > 0)) {
+  //     printf("%s :", p->name);
+  //     printf("\t tickets: %d \t times scheduled: %d\n", p->ticket, p->sched_ticks);
+  //   }
+  // } 
 }

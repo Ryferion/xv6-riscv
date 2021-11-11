@@ -115,16 +115,17 @@ uint64 sys_giveinfo(void) //written by ryan quach and tandy dang
 
 uint64 sys_setticket(void) //written by ryan quach
 {
+  struct proc *p = myproc();
   int n;
   // int strideK = 10000;
   argint(0, &n);
   // printf("sys setting ticket to n: %d\n", n);
   // setticket(n);
-  myproc()->ticket = n;
+  // myproc()->ticket = n;
   // myproc()->stride = strideK / n;
-  myproc()->pass = 0;
+  // myproc()->pass = 0;
   // printf("current proc tickets: %d\n", myproc()->ticket);
-
+  setticket(p, n);
   return 0;
 }
 
