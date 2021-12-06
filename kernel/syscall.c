@@ -107,6 +107,7 @@ extern uint64 sys_uptime(void);
 extern uint64 sys_giveinfo(void); // definition for info syscall
 extern uint64 sys_setticket(void); // declaration for ticket set
 extern uint64 sys_sched_statistics(void);
+extern uint64 sys_clone(void); // create kernel thread
 int callCount;
 
 static uint64 (*syscalls[])(void) = {
@@ -132,8 +133,9 @@ static uint64 (*syscalls[])(void) = {
 [SYS_mkdir]   sys_mkdir,
 [SYS_close]   sys_close,
 [SYS_giveinfo]    sys_giveinfo, // info: syscall entry
-[SYS_setticket]   sys_setticket, //sets ticket
+[SYS_setticket]   sys_setticket, // sets ticket
 [SYS_sched_statistics]  sys_sched_statistics, // error and data
+[SYS_clone]   sys_clone, // create kernel thread
 };
 
 void

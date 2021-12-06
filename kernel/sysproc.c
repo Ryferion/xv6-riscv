@@ -117,20 +117,24 @@ uint64 sys_setticket(void) //written by ryan quach
 {
   struct proc *p = myproc();
   int n;
-  // int strideK = 10000;
   argint(0, &n);
   // printf("sys setting ticket to n: %d\n", n);
-  // setticket(n);
-  // myproc()->ticket = n;
-  // myproc()->stride = strideK / n;
-  // myproc()->pass = 0;
-  // printf("current proc tickets: %d\n", myproc()->ticket);
   setticket(p, n);
+  // printf("current proc tickets: %d\n", p->ticket);
   return 0;
 }
 
-/* TD: Stride scheduling code */
+/* TD: Stride scheduling code */ // written by tandy dang
 uint64 sys_sched_statistics(void) {
   sched_statistics();
+  return 0;
+}
+
+uint64 sys_clone(void) {
+  // void* stack;
+  int size;
+  // argint(0, &stack);
+  argint(1, &size);
+  clone(0, size);
   return 0;
 }

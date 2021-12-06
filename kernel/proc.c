@@ -309,6 +309,65 @@ growproc(int n)
   return 0;
 }
 
+static struct proc*
+allocproc_thread(void)
+{
+  struct proc *p;
+
+  for(p = proc; p < &proc[NPROC]; p++) {
+    acquire(&p->lock);
+    if(p->state == UNUSED) {
+      goto found;
+    } else {
+      release(&p->lock);
+    }
+  }
+  return 0;
+
+found:
+  p->pid = allocpid();
+  p->state = USED;
+
+  // Allocate kernel level stack
+  if ((p->kstack = kalloc()) == 0)
+  {
+    p->state = UNUSED;
+    return 0;
+  }
+
+  
+
+  
+  // Allocate a trapframe page.
+  if((p->trapframe = (struct trapframe *)kalloc()) == 0){
+    // freeproc(p);
+    p->state = UNUSED;
+    // release(&p->lock);
+    return 0;
+  }
+  
+
+  
+  // An empty user page table.
+  // p->pagetable = proc_pagetable(p);
+  if(p->pagetable == 0){
+    // freeproc(p);
+    p->pagetable = proc_pagetable(p);
+    // p->state = UNUSED;
+    // release(&p->lock);
+    // return 0;
+  }
+  
+
+  // Set up new context to start executing at forkret,
+  // which returns to user space.
+  memset(&p->context, 0, sizeof(p->context));
+  p->context.ra = (uint64)forkret;
+  p->context.sp = p->kstack + PGSIZE;
+  p->thread_num = 0;
+  return p;
+}
+
 // Create a new process, copying the parent.
 // Sets up child kernel stack to return as if from fork() system call.
 int
@@ -359,6 +418,77 @@ fork(void)
 
   safestrcpy(np->name, p->name, sizeof(p->name));
 
+  pid = np->pid;
+
+  release(&np->lock);
+
+  acquire(&wait_lock);
+  np->parent = p;
+  release(&wait_lock);
+
+  acquire(&np->lock);
+  np->state = RUNNABLE;
+  release(&np->lock);
+
+  return pid;
+}
+
+
+// create a new kernel thread
+// Sets up child kernel stack to return as if from fork() system call.
+int
+clone(void *stack, int size)
+{
+  int i, pid;
+  struct proc *np;
+  struct proc *p = myproc();
+
+  // Allocate process.
+  if((np = allocproc_thread()) == 0){
+    return -1;
+  }
+
+  // Copy user memory from parent to child.
+  if(uvmcopy(p->pagetable, np->pagetable, p->sz) < 0){
+    freeproc(np);
+    release(&np->lock);
+    return -1;
+  }
+  np->sz = p->sz;
+
+  // copy saved user registers.
+  *(np->trapframe) = *(p->trapframe);
+
+  // Cause fork to return 0 in the child.
+  np->trapframe->a0 = 0;
+
+  // define lottery and stride parameters
+  if (np->ticket == 0)
+  {
+    np->stride = 0;
+    np->sched_ticks = 0;
+    np->pass = -1;
+  }
+  else
+  {
+    np->stride = strideK/np->ticket;
+    np->sched_ticks = 0;
+    np->pass = np->stride;
+  }
+
+  np->stack = stack;
+  np->trapframe->sp = size;//(int)stack + size;
+
+  
+  // increment reference counts on open file descriptors.
+  for(i = 0; i < NOFILE; i++)
+    if(p->ofile[i])
+      np->ofile[i] = filedup(p->ofile[i]);
+  np->cwd = idup(p->cwd);
+
+  safestrcpy(np->name, p->name, sizeof(p->name));
+  p->thread_num += 1;
+  np->thread_num = p->thread_num;
   pid = np->pid;
 
   release(&np->lock);

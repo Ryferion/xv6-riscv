@@ -96,6 +96,8 @@ struct proc {
   int stride;                  // How fast it increments
   int pass;                    // Updated for time slice
   int sched_ticks;
+  int thread_num;
+  void *stack;
   // wait_lock must be held when using this:
   struct proc *parent;         // Parent process
 
