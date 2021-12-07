@@ -530,6 +530,10 @@ exit(int status)
   if(p == initproc)
     panic("init exiting");
 
+  if (p->thread_num != 0) // don't continue to exit if there are still threads
+  {
+    return;
+  }
   // Close all open files.
   for(int fd = 0; fd < NOFILE; fd++){
     if(p->ofile[fd]){
@@ -587,6 +591,7 @@ wait(uint64 addr)
         if(np->state == ZOMBIE){
           // Found one.
           pid = np->pid;
+          np->thread_num--; // assume that once this is over, it'll have lost one thread
           if(addr != 0 && copyout(p->pagetable, addr, (char *)&np->xstate,
                                   sizeof(np->xstate)) < 0) {
             release(&np->lock);
@@ -603,7 +608,7 @@ wait(uint64 addr)
     }
 
     // No point waiting if we don't have any children.
-    if(!havekids || p->killed){
+    if((!havekids || p->killed) && (np->thread_num == 0)){ // make sure there are no threads
       release(&wait_lock);
       return -1;
     }
