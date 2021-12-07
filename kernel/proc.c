@@ -6,6 +6,9 @@
 #include "proc.h"
 #include "defs.h"
 #include "rand.h"
+#include "user/threadhelper.h"
+// #include "user/threadhelper.c"
+
 
 // added logic/w makefile to toggle which scheduler to use
 #ifdef LOTTERY 
@@ -310,7 +313,7 @@ growproc(int n)
 }
 
 static struct proc*
-allocproc_thread(void)
+allocproc_thread(struct proc* parent)
 {
   struct proc *p;
 
@@ -328,34 +331,22 @@ found:
   p->pid = allocpid();
   p->state = USED;
 
-  // Allocate kernel level stack
-  if ((p->kstack = kalloc()) == 0)
-  {
-    p->state = UNUSED;
-    return 0;
-  }
-
-  
-
-  
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
-    // freeproc(p);
-    p->state = UNUSED;
-    // release(&p->lock);
+    freeproc(p);
+    release(&p->lock);
     return 0;
   }
   
 
   
-  // An empty user page table.
-  // p->pagetable = proc_pagetable(p);
+  // user page table from parent for child
+  p->pagetable = parent->pagetable; //used to be proc_pagetable(p);
   if(p->pagetable == 0){
-    // freeproc(p);
-    p->pagetable = proc_pagetable(p);
-    // p->state = UNUSED;
-    // release(&p->lock);
-    // return 0;
+    freeproc(p);
+    // p->pagetable = proc_pagetable(p);
+    release(&p->lock);
+    return 0;
   }
   
 
@@ -439,12 +430,18 @@ fork(void)
 int
 clone(void *stack, int size)
 {
-  int i, pid;
+  int i;//, pid;
   struct proc *np;
   struct proc *p = myproc();
 
   // Allocate process.
-  if((np = allocproc_thread()) == 0){
+  if((np = allocproc_thread(p)) == 0){
+    return -1;
+  }
+
+  // if stack is empty
+  if (stack == 0)
+  {
     return -1;
   }
 
@@ -476,8 +473,8 @@ clone(void *stack, int size)
     np->pass = np->stride;
   }
 
-  np->stack = stack;
-  np->trapframe->sp = size;//(int)stack + size;
+  // np->stack = stack;
+  np->trapframe->sp = (uint64)stack + size;
 
   
   // increment reference counts on open file descriptors.
@@ -487,9 +484,11 @@ clone(void *stack, int size)
   np->cwd = idup(p->cwd);
 
   safestrcpy(np->name, p->name, sizeof(p->name));
-  p->thread_num += 1;
+
+  // threading counter
+  p->thread_num = p->thread_num + 1;
   np->thread_num = p->thread_num;
-  pid = np->pid;
+  // pid = np->pid;
 
   release(&np->lock);
 
@@ -501,7 +500,8 @@ clone(void *stack, int size)
   np->state = RUNNABLE;
   release(&np->lock);
 
-  return pid;
+  return np->thread_num;
+  // return pid;
 }
 
 // Pass p's abandoned children to init.

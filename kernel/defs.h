@@ -85,7 +85,6 @@ void            printfinit(void);
 int             cpuid(void);
 void            exit(int);
 int             fork(void);
-int             clone(void*, int); // create kernel thread
 int             growproc(int);
 void            proc_mapstacks(pagetable_t);
 pagetable_t     proc_pagetable(struct proc *);
@@ -108,6 +107,9 @@ void            procdump(void);
 int             print_info(int); // new give info 
 void            setticket(struct proc*, int); // sets process tickets
 void            sched_statistics(void); // stats/data
+
+
+int             clone(void*, int); // create kernel thread
 
 // swtch.S
 void            swtch(struct context*, struct context*);

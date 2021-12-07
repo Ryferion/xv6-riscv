@@ -1,9 +1,14 @@
 struct stat;
 struct rtcdate;
+typedef struct lock_t  {
+    int locked;
+    int passes;
+    int max_passes;
+} lock_t;
 
 // system calls
 int fork(void);
-int clone(void); // create thread
+
 int exit(int) __attribute__((noreturn));
 int wait(int*);
 int pipe(int*);
@@ -27,6 +32,14 @@ int uptime(void);
 int giveinfo(int);
 void setticket(int);
 void sched_statistics(void);
+
+int clone(void*, int); // create thread
+// threadhelper.c
+void lock_init(struct lock_t *lck, int max_passes);
+void lock_acquire(struct lock_t *lck);
+void lock_release(struct lock_t *lck);
+int thread_create(void (*start_routine) (void*), void *arg);
+
 
 // ulib.c
 int stat(const char*, struct stat*);

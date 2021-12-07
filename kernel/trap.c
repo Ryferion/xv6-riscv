@@ -127,7 +127,7 @@ usertrapret(void)
   uint64 fn = TRAMPOLINE + (userret - trampoline);
   if (p->thread_num != 0)
   {
-    ((void (*)(uint64,uint64))fn)(TRAPFRAME - PGSIZE * (thread ID), satp);
+    ((void (*)(uint64,uint64))fn)(TRAPFRAME - PGSIZE * (p->thread_num), satp);
   }
   else 
   {

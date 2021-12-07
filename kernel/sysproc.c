@@ -131,10 +131,5 @@ uint64 sys_sched_statistics(void) {
 }
 
 uint64 sys_clone(void) {
-  // void* stack;
-  int size;
-  // argint(0, &stack);
-  argint(1, &size);
-  clone(0, size);
   return 0;
 }
